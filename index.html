@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gunting Batu Kertas - Meja Hijau Multiplayer</title>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+        /* --- STYLE UTAMA (CSS) --- */
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
+        body { background-color: #1a1a1a; color: white; display: flex; justify-content: center; align-items: center; min-height: 100vh; overflow-x: hidden; }
+        .container { width: 100%; max-width: 800px; padding: 15px; text-align: center; }
+        .card { background: #2a2a2a; padding: 25px; border-radius: 15px; box-shadow: 0 8px 20px rgba(0,0,0,0.5); margin-bottom: 20px; }
+        h1 { color: #4ade80; margin-bottom: 20px; font-size: 24px; text-transform: uppercase; letter-spacing: 2px; }
+        .input-group { margin-bottom: 15px; text-align: left; }
+        .input-group label { display: block; margin-bottom: 5px; color: #ccc; font-size: 14px; }
+        input[type="text"] { width: 100%; padding: 12px; border: 2px solid #444; border-radius: 8px; background: #1e1e1e; color: white; font-size: 16px; }
+        input[type="text"]:focus { border-color: #4ade80; outline: none; }
+        .btn { background: #4ade80; color: #111; border: none; padding: 12px 20px; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer; width: 100%; margin-top: 10px; transition: 0.2s; }
+        .btn:disabled { background: #444; color: #777; cursor: not-allowed; }
+        .btn-secondary { background: #3b82f6; color: white; }
+        .divider { margin: 15px 0; color: #888; }
+        #game-screen { display: none; }
+        .table-billiard { background: radial-gradient(circle, #22c55e 0%, #15803d 100%); border: 12px solid #78350f; border-radius: 40px; height: 380px; position: relative; box-shadow: inset 0 0 30px rgba(0,0,0,0.8), 0 10px 25px rgba(0,0,0,0.6); margin-top: 15px; display: flex; flex-direction: column; justify-content: space-between; padding: 20px; }
+        .top-bar { display: flex; justify-content: space-between; align-items: center; z-index: 10; }
+        .score-board { background: rgba(0,0,0,0.7); padding: 8px 15px; border-radius: 20px; font-size: 18px; font-weight: bold; border: 1px solid #4ade80; }
+        .timer { background: #ef4444; width: 40px; height: 40px; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-weight: bold; font-size: 18px; box-shadow: 0 0 10px rgba(239,68,68,0.5); }
+        .arena { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80%; display: flex; justify-content: space-between; align-items: center; }
+        .hand-display { font-size: 60px; transition: transform 0.3s ease; }
+        #player-hand { transform: scaleX(-1); }
+        .status-ready { font-size: 14px; background: #3b82f6; padding: 3px 8px; border-radius: 5px; margin-top: 5px; display: none; }
+        .choice-container { display: flex; justify-content: space-around; width: 100%; z-index: 10; }
+        .btn-choice { background: rgba(255,255,255,0.2); border: 2px solid white; color: white; font-size: 28px; width: 65px; height: 65px; border-radius: 50%; cursor: pointer; display: flex; justify-content: center; align-items: center; }
+        .btn-choice:disabled { background: rgba(0,0,0,0.3) !important; border-color: #555 !important; color: #555 !important; cursor: not-allowed; }
+        .btn-choice.selected { background: #4ade80; color: #111; border-color: #4ade80; transform: scale(1.1); }
+        .overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 100; justify-content: center; align-items: center; padding: 20px; }
+        .modal { background: #2a2a2a; padding: 30px; border-radius: 15px; border: 3px solid #4ade80; max-width: 500px; width: 100%; text-align: center; }
+        .modal h2 { color: #4ade80; margin-bottom: 15px; }
+        .challenge-box { background: #1e1e1e; padding: 15px; border-radius: 8px; margin: 15px 0; font-style: italic; border-left: 5px solid #3b82f6; font-size: 18px; }
+        .lobby-status { font-weight: bold; color: #ffbe0b; margin: 15px 0; font-size: 18px; }
+        .round-status-text { color: #ffbe0b; font-size: 16px; margin-top: 5px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div id="menu-screen" class="card">
+            <h1>Gunting Batu Kertas</h1>
+            <div class="input-group">
+                <label>Tantangan Kamu (Wajib diisi):</label>
+                <input type="text" id="challenge-input" placeholder="Contoh: Traktir kopi / Push up 10x" oninput="validateForm()">
+                <small style="color: #aaa; font-size: 12px; display:block; margin-top:5px;">*Jika saya menang lawan harus melakukan ini.</small>
+            </div>
+            <button id="btn-bot" class="btn" disabled onclick="startBotMode()">Bermain Bersama Bot</button>
+            <div class="divider">─ ATAU MODE ONLINE REAL-TIME ─</div>
+            <button id="btn-create-room" class="btn btn-secondary" disabled onclick="createOnlineRoom()">Buat Room Baru</button>
+            <div style="margin-top: 15px;">
+                <input type="text" id="room-id-input" placeholder="Masukkan ID Room Teman" style="margin-bottom: 8px;">
+                <button id="btn-join-room" class="btn btn-secondary" style="margin-top:0;" onclick="joinOnlineRoom()">Masuk Room</button>
+            </div>
+        </div>
+
+        <div id="game-screen">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 14px; color: #aaa;">
+                <span id="info-ronde">Ronde: Bersiap...</span>
+                <span id="info-mode">Mode: -</span>
+            </div>
+            <div class="table-billiard">
+                <div class="top-bar">
+                    <div class="score-board">P1: <span id="p1-score">0</span> / 5</div>
+                    <div class="timer" id="timer-display">--</div>
+                    <div class="score-board">Lawan: <span id="p2-score">0</span> / 5</div>
+                </div>
+                <div class="arena">
+                    <div style="text-align: center;">
+                        <div style="font-size:12px; color:#ddd; margin-bottom:5px;">Kamu</div>
+                        <div class="hand-display" id="player-hand">❓</div>
+                        <div class="status-ready" id="p1-ready">SIAP</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div id="round-result-msg" class="round-status-text"></div>
+                        <div style="font-size:11px; color:#aaa; margin-top:5px;">Target: 5 Poin</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="font-size:12px; color:#ddd; margin-bottom:5px;">Lawan</div>
+                        <div class="hand-display" id="opponent-hand">❓</div>
+                        <div class="status-ready" id="p2-ready">SIAP</div>
+                    </div>
+                </div>
+                <div class="choice-container">
+                    <button class="btn-choice" id="btn-batu" onclick="selectChoice('batu')" disabled>✊</button>
+                    <button class="btn-choice" id="btn-gunting" onclick="selectChoice('gunting')" disabled>✌️</button>
+                    <button class="btn-choice" id="btn-kertas" onclick="selectChoice('kertas')" disabled>✋</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="overlay" id="lobby-overlay">
+        <div class="modal">
+            <h2 id="lobby-title">Ruang Tunggu</h2>
+            <div class="lobby-status" id="lobby-status-text">Sedang memproses...</div>
+            <button id="btn-ready-start" class="btn" style="display: none;" onclick="clickReadyStart()">Siap Mulai</button>
+        </div>
+    </div>
+
+    <div class="overlay" id="result-overlay">
+        <div class="modal">
+            <h2 id="winner-title">PLAYER 1 MENANG!</h2>
+            <p>Tantangan yang harus dilaksanakan oleh yang kalah:</p>
+            <div class="challenge-box" id="challenge-reveal">""</div>
+            <button class="btn" onclick="resetToMenu()">Kembali ke Menu Utama</button>
+        </div>
+    </div>
+
+    <script>
+        // ISI DENGAN LINK RENDER JIKA SUDAH DEPLOY (Contoh: https://game-kamu.onrender.com)
+        const SERVER_URL = "GANTI_DENGAN_LINK_RENDER_KAMU"; 
+        
+        let socket;
+        let myChallenge = "";
+        let currentRoomId = null;
+        let isMyTurnToChoose = false;
+
+        const handIcons = { 'batu': '✊', 'gunting': '✌️', 'kertas': '✋', 'blank': '❓', 'afk': '❌' };
+
+        // Koneksi otomatis ke server jika link diisi, jika tidak dia berjalan local (fallback mode)
+        if (SERVER_URL !== "GANTI_DENGAN_LINK_RENDER_KAMU") {
+            socket = io(SERVER_URL);
+            setupSocketListeners();
+        } else {
+            console.log("Menjalankan mode simulasi lokal karena server URL belum diset.");
+        }
+
+        function validateForm() {
+            const input = document.getElementById('challenge-input').value.trim();
+            document.getElementById('btn-bot').disabled = (input === "");
+            document.getElementById('btn-create-room').disabled = (input === "");
+            myChallenge = input;
+        }
+
+        // ==========================================
+        //  LOGIKA HUBUNGAN SOCKET.IO (ONLINE NYATA)
+        // ==========================================
+        function setupSocketListeners() {
+            socket.on('roomCreated', (roomId) => {
+                currentRoomId = roomId;
+                document.getElementById('lobby-title').innerText = "Room ID: " + roomId;
+                document.getElementById('lobby-status-text').innerText = "Sedang menunggu lawan masuk...";
+                document.getElementById('btn-ready-start').style.display = 'none';
+            });
+
+            socket.on('opponentJoined', () => {
+                document.getElementById('lobby-status-text').innerText = "Ayo Mulai! Lawan telah bergabung.\nTekan tombol di bawah jika kamu siap.";
+                document.getElementById('btn-ready-start').style.display = 'block';
+            });
+
+            socket.on('lobbyStatusUpdate', (msg) => {
+                document.getElementById('lobby-status-text').innerText = msg;
+            });
+
+            socket.on('gameStarted', (data) => {
+                document.getElementById('lobby-overlay').style.display = 'none';
+                document.getElementById('menu-screen').style.display = 'none';
+                document.getElementById('game-screen').style.display = 'block';
+                document.getElementById('info-mode').innerText = "Mode: Online Multiplayer";
+                resetArenaVisuals();
+            });
+
+            socket.on('timerTick', (timeLeft) => {
+                document.getElementById('timer-display').innerText = timeLeft;
+            });
+
+            socket.on('startSelection', (roundNum) => {
+                document.getElementById('info-ronde').innerText = `Ronde: ${roundNum}`;
+                document.getElementById('round-result-msg').innerText = "";
+                document.getElementById('player-hand').innerText = handIcons['blank'];
+                document.getElementById('opponent-hand').innerText = handIcons['blank'];
+                document.getElementById('p1-ready').style.display = 'none';
+                document.getElementById('p2-ready').style.display = 'none';
+                
+                const buttons = document.querySelectorAll('.btn-choice');
+                buttons.forEach(btn => btn.classList.remove('selected'));
+                
+                isMyTurnToChoose = true;
+                enableChoiceButtons(true);
+            });
+
+            socket.on('playerReadyVisual', (idYangReady) => {
+                if (idYangReady === socket.id) {
+                    document.getElementById('p1-ready').style.display = 'block';
+                } else {
+                    document.getElementById('p2-ready').style.display = 'block';
+                }
+            });
+
+            socket.on('roundEvaluated', (data) => {
+                isMyTurnToChoose = false;
+                enableChoiceButtons(false);
+
+                // Cari yang mana id milik kita
+                const saya = data.players.find(p => p.id === socket.id);
+                const lawan = data.players.find(p => p.id !== socket.id);
+
+                document.getElementById('player-hand').innerText = handIcons[saya.choice || 'afk'];
+                document.getElementById('opponent-hand').innerText = handIcons[lawan.choice || 'afk'];
+
+                document.getElementById('p1-score').innerText = saya.score;
+                document.getElementById('p2-score').innerText = lawan.score;
+
+                const statusMsg = document.getElementById('round-result-msg');
+                if (data.roundWinner === 'draw') {
+                    statusMsg.innerText = "SERI!";
+                    statusMsg.style.color = "#ffbe0b";
+                } else if (data.roundWinner === socket.id) {
+                    statusMsg.innerText = "+1 Poin Kamu";
+                    statusMsg.style.color = "#4ade80";
+                } else {
+                    statusMsg.innerText = "+1 Poin Lawan";
+                    statusMsg.style.color = "#ef4444";
+                }
+            });
+
+            socket.on('gameOver', (data) => {
+                setTimeout(() => {
+                    document.getElementById('result-overlay').style.display = 'flex';
+                    const title = document.getElementById('winner-title');
+                    const challengeReveal = document.getElementById('challenge-reveal');
+
+                    if (data.winnerId === socket.id) {
+                        title.innerText = "KAMU MENANG GAME! 🎉";
+                        challengeReveal.innerText = `Lawan wajib: "${myChallenge}"`;
+                    } else {
+                        title.innerText = "LAWAN MENANG GAME! ❌";
+                        challengeReveal.innerText = `Kamu wajib: "${data.winnerChallenge}"`;
+                    }
+                }, 2000);
+            });
+
+            socket.on('errorMsg', (msg) => {
+                alert(msg);
+                document.getElementById('lobby-overlay').style.display = 'none';
+            });
+        }
+
+        function createOnlineRoom() {
+            if(!socket) { alert("Server belum terhubung!"); return; }
+            document.getElementById('lobby-overlay').style.display = 'flex';
+            socket.emit('createRoom', { challenge: myChallenge });
+        }
+
+        function joinOnlineRoom() {
+            if(!socket) { alert("Server belum terhubung!"); return; }
+            const roomId = document.getElementById('room-id-input').value.trim().toUpperCase();
+            if (roomId === "") { alert("Masukkan ID Room!"); return; }
+            
+            document.getElementById('lobby-overlay').style.display = 'flex';
+            document.getElementById('lobby-title').innerText = "Room ID: " + roomId;
+            document.getElementById('lobby-status-text').innerText = "Mencoba bergabung...";
+            
+            currentRoomId = roomId;
+            socket.emit('joinRoom', { roomId: roomId, challenge: myChallenge });
+        }
+
+        function clickReadyStart() {
+            socket.emit('playerReadyToStart', { roomId: currentRoomId });
+            document.getElementById('btn-ready-start').style.display = 'none';
+            document.getElementById('lobby-status-text').innerText = "Menunggu lawan siap...";
+        }
+
+        function selectChoice(choice) {
+            if (!isMyTurnToChoose) return;
+            isMyTurnToChoose = false;
+            
+            const index = ['batu', 'gunting', 'kertas'].indexOf(choice);
+            document.querySelectorAll('.btn-choice')[index].classList.add('selected');
+            enableChoiceButtons(false);
+
+            socket.emit('makeChoice', { roomId: currentRoomId, choice: choice });
+        }
+
+        function enableChoiceButtons(status) {
+            document.getElementById('btn-batu').disabled = !status;
+            document.getElementById('btn-gunting').disabled = !status;
+            document.getElementById('btn-kertas').disabled = !status;
+        }
+
+        function resetArenaVisuals() {
+            document.getElementById('p1-score').innerText = "0";
+            document.getElementById('p2-score').innerText = "0";
+            document.getElementById('round-result-msg').innerText = "";
+        }
+
+        function resetToMenu() {
+            location.reload(); // Refresh halaman untuk reset koneksi socket secara bersih
+        }
+
+        // FALLBACK MODE: JIKA PILIH BOT (Berjalan lokal seperti sebelumnya)
+        function startBotMode() {
+            alert("Mode BOT diaktifkan via simulasi lokal. Set SERVER_URL untuk mode online nyata!");
+            // Logika bot lokal versi sebelumnya bisa dimasukkan di sini jika server mati
+        }
+    </script>
+</body>
+</html>
